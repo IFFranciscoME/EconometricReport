@@ -1,0 +1,245 @@
+
+% -- ----------------------------------------------------------------------------------------- -- #
+% -- Initial Developer: IF Francisco ME ------------------------------------------------------ -- #
+% -- GitHub Repossitory:  -------------------------------------------------------------------- -- #
+% -- License: GNU General Public License ----------------------------------------------------- -- #
+% -- ----------------------------------------------------------------------------------------- -- #
+
+\documentclass[final, xcolor=table]{beamer}
+\usepackage[orientation=portrait,size=a0,scale=1.4]{beamerposter}
+\usetheme{FichaTecnica}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[spanish]{babel}
+\usepackage{amsmath,amsthm,amssymb,latexsym}
+\usepackage{booktabs}
+\usepackage{ragged2e}
+\graphicspath{{figures/}}
+
+<<Variables, include=FALSE, echo=FALSE, eval=FALSE>>=
+rm(list=ls())
+
+Serie <- "USD_MXN"
+Fecha_Inicial <- "2017-01-02"
+Fecha_Final   <- "2017-07-28"   
+@
+
+<<Ini, include=FALSE, echo=FALSE, eval=FALSE>>=
+
+suppressMessages(library(downloader))
+suppressMessages(library(ggplot2))
+suppressMessages(library(knitr))
+suppressMessages(library(httr))
+suppressMessages(library(RCurl))
+suppressMessages(library(jsonlite))
+suppressMessages(library(dplyr))
+suppressMessages(library(xts))
+suppressMessages(library(quantmod))
+suppressMessages(library(RMySQL))
+
+@
+
+<<Data, include=FALSE, echo=FALSE, eval=FALSE>>=
+
+DB_HST  <- "127.0.0.1" 
+DB_IID  <- "mystdb"
+DB_PRT  <- 3306
+DB_MUN  <- "root"
+DB_PWD  <- "root"
+
+OA_At  <- "practice"
+OA_Ai  <- 1742531
+OA_Ak  <- "ada4a61b0d5bc0e5939365e01450b614-4121f84f01ad78942c46fc3ac777baa6"
+
+@
+
+
+<<GitHub, include=FALSE, echo=FALSE, eval=FALSE>>=
+RawGitHub <- "https://raw.githubusercontent.com/IFFranciscoME/"
+
+DataProcessor <- paste(RawGitHub,"RDataProcessor/master/RDataProcessor.R",sep="")
+downloader::source_url(DataProcessor,prompt=FALSE,quiet=TRUE)
+
+ROandaAPI <- paste(RawGitHub,"ROandaAPI/master/ROandaAPI.R",sep="")
+downloader::source_url(ROandaAPI,prompt=FALSE,quiet=TRUE)
+
+RDataVisualization <- paste(RawGitHub,"RDataVisualization/master/RDataVisualization.R",sep="")
+downloader::source_url(RDataVisualization,prompt=FALSE,quiet=TRUE)
+
+@
+
+<<Datos, include=FALSE, echo=FALSE, eval=FALSE>>=
+
+PipSize <- 4
+MultPip <- 10000
+OA_Da  <- 16
+OA_Ta  <- "America/Mexico_City"
+OA_In  <- Serie
+OA_Gn  <- c("H1", "H8", "D")
+OA_Ini <- as.Date(Fecha_Inicial)
+OA_Fin <- as.Date(Fecha_Final)
+Datos  <- list(Datos_H1 = {}, Datos_H8 = {}, Datos_D = {})
+
+for(j in 1:3) {
+  Indices <- sort(seq(0,400,90), decreasing = TRUE)
+  Fechas  <- c()
+  for(i in 1:length(Indices)) Fechas[i] <- as.character(OA_Fin-Indices[i])
+  Precios <- lapply(1:(length(Indices)-1), function(x)
+    HisPrices(AccountType = OA_At, Granularity = OA_Gn[j], DayAlign = OA_Da, TimeAlign = OA_Ta,
+              Token = OA_Ak, Instrument = OA_In, Start = Fechas[x], End = Fechas[x+1], Count=NULL))
+  Datos[[j]] <- do.call(rbind,Precios)
+  Datos[[j]] <- Datos[[j]][,1:5]
+
+  Datos[[j]] <- Datos[[j]][which(as.Date(Datos[[j]]$TimeStamp) == OA_Ini):length(Datos[[j]]$TimeStamp),]
+  Datos[[j]] <- unique(Datos[[j]])
+  
+  }
+
+# Datos[[1]] <- Datos[[1]][which(as.Date(Datos[[1]]$TimeStamp) == OA_Ini):length(Datos[[1]]$TimeStamp),]
+# Datos[[2]] <- Datos[[2]][which(as.Date(Datos[[2]]$TimeStamp) == OA_Ini):length(Datos[[2]]$TimeStamp),]
+# Datos[[3]] <- Datos[[3]][which(as.Date(Datos[[3]]$TimeStamp) == OA_Ini):length(Datos[[3]]$TimeStamp),]
+
+FirstTS <- first(intersect(intersect(Datos[[1]]$TimeStamp,Datos[[2]]$TimeStamp),Datos[[3]]$TimeStamp))
+LastTS  <- last(intersect(intersect(Datos[[1]]$TimeStamp,Datos[[2]]$TimeStamp),Datos[[3]]$TimeStamp))
+
+# -- Match initial date for 3 time series
+FComun123  <- which(Datos[[1]]$TimeStamp == FirstTS)
+LComun123  <- which(Datos[[1]]$TimeStamp == LastTS)
+Datos[[1]] <- Datos[[1]][FComun123:LComun123,]
+Datos[[2]] <- Datos[[2]][which(Datos[[2]]$TimeStamp == FirstTS):which(Datos[[2]]$TimeStamp == LastTS), ]
+Datos[[3]] <- Datos[[3]][which(Datos[[3]]$TimeStamp == FirstTS):which(Datos[[3]]$TimeStamp == LastTS), ]
+@
+
+<<Datos, include=FALSE, echo=FALSE, eval=FALSE>>=
+
+DB_Con <- dbConnect(MySQL(),
+                    user = DB_MUN, 
+                    password = DB_PWD,
+                    host = DB_HST,
+                    dbname = DB_IID)
+
+Query <- "CREATE TABLE `mystdb`.`datos_h8` (`TimeStamp` DATETIME NOT NULL,
+                                            `Open` FLOAT NULL,
+                                            `High` FLOAT NULL,
+                                            `Low` FLOAT NULL,
+                                            `Close` FLOAT NULL,
+          PRIMARY KEY (`TimeStamp`)); "
+
+res_query <- dbGetQuery(conn = DB_Con, statement = Query)
+
+for(i in 1:length(Datos[[2]]$TimeStamp)) {
+  Query_P <- "INSERT INTO `mystdb`.`datos_h8` (`TimeStamp`, `Open`, `High`, `Low`, `Close`) VALUES ( "
+  Valores <- paste( "'",Datos[[2]]$TimeStamp[i],"'", ", " , "'", Datos[[2]]$Open[i],"'", ", ",
+                    "'",Datos[[2]]$High[i],"'", ", ", "'",Datos[[2]]$Low[i],"'",", ",
+                    "'",Datos[[2]]$Close[i],"'", ');', sep="")
+
+Query_PF <- paste(Query_P,Valores,sep="")
+
+dbGetQuery(conn = DB_Con, statement = Query_PF)
+}
+
+dbDisconnect(DB_Con)
+
+@
+
+
+<<SQL_Datos, include=FALSE, echo=FALSE, eval=FALSE>>=
+
+x <- Datos[[1]]$Close[1:10]
+conf.level <- 0.95
+Type = "partial"
+
+ciline <- qnorm((1 - conf.level)/2)/sqrt(length(x))
+
+bacf   <- acf(x, plot = FALSE, type = Type)
+
+bacfdf <- with(bacf, data.frame(lag, acf))
+
+q <- ggplot(data=bacfdf, mapping=aes(x=lag, y=acf)) +
+       geom_bar(stat = "identity", position = "identity") +
+       geom_hline(yintercept = ciline, color = "dark grey", size = 0.35, linetype = "dashed")
+q
+
+ggACF(x = Datos[[1]], LagMax = 30, Type = "correlation")
+
+  x = Datos[[1]]$Close[1:100]
+  LagMax = 30
+  Type = "correlation"
+  Yaxis <- "Yaxis"
+  Xaxis <- "Xaxis"
+  
+  
+  ciline <- 2/sqrt(length(x))
+  bacf   <- acf(x, plot = FALSE, lag.max = LagMax, type = Type)
+  bacfdf <- with(bacf, data.frame(lag, acf))
+  bacfdf <- bacfdf[-seq(1, 0),]
+  Sig_nc <- (abs(bacfdf[,2]) > abs(ciline))^2
+  bacfdf <- cbind(bacfdf, Sig_nc)
+  
+  fac_gg <- qplot(lag, acf, data=bacfdf,geom="bar",width=.75, stat = "identity",
+  position = "identity", ylab = Yaxis, xlab = Xaxis,  fill = factor(Sig_nc))   +
+  geom_hline(yintercept = -ciline, color = "dark grey", size = 0.35,
+  linetype = "dashed")                                                     +
+  geom_hline(yintercept = ciline,color = "dark grey", size = 0.35,
+  linetype = "dashed")                                                     +
+  geom_hline(yintercept = 0, color = "dark grey",size = 0.25)              +
+  scale_fill_hue(breaks = 0:1, labels=c("No Significative"," Significative"),
+                 h=c(260, 235))                                            +
+  scale_x_continuous(breaks = c(2,4,6,8,10,12,14,16,18,20,22,24,26,28)) +
+  theme(panel.background = element_rect(size = .75, colour = "dark grey",
+  fill = "white"), 
+  axis.title.x = element_text(size = 8.5),
+  axis.title.y = element_text(size = 8.5),
+  plot.title = element_text(size = 5,vjust = 1),
+  legend.position = "bottom", legend.title = element_blank(),
+  legend.text = element_text(colour="blue",size = 8))
+  
+@
+
+
+% -- -------------------------------------------------------------------------------------------- %
+%	-- TITLE SECTION 
+% -- -------------------------------------------------------------------------------------------- %
+
+\title{\Huge Applied econometrics for time series analysis }
+
+% -- -------------------------------------------------------------------------------------------- %
+%	-- FOOTER TEXT
+% -- -------------------------------------------------------------------------------------------- %
+
+\newcommand{\leftfoot}{Official Web }
+\newcommand{\rightfoot}{More Info \textbf{if.francisco.me@gmail.com}}
+
+% -- -------------------------------------------------------------------------------------------- %
+
+\begin{document}
+
+% -- ----------------------------------------------------------------------------------------- -- %
+% -- -- Informacion del Activo -- VELAS ------------------------------------------------------ -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{columns}[t]
+
+% -- ------------------------------------------------------------------------------- Columna 1 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.66 \linewidth}
+
+  \begin{block}{Precio de Cierre}
+
+  \end{block}
+  
+\end{column}
+
+% -- ------------------------------------------------------------------------------- Columna 2 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.32 \linewidth}
+  \begin{block}{Estadistica Precios}
+
+  \end{block}
+\end{column}
+
+\end{columns}
+
+\end{document}
