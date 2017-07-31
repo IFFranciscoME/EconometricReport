@@ -16,36 +16,53 @@
 \usepackage{ragged2e}
 \graphicspath{{figures/}}
 
-<<Variables, include=FALSE, echo=FALSE, eval=FALSE>>=
+<<Variables, include=FALSE, echo=FALSE, eval=TRUE>>=
 rm(list=ls())
+Sys.setlocale("LC_TIME", "C") # To have units in english
 
 Serie <- "USD_MXN"
 Fecha_Inicial <- "2017-01-02"
-Fecha_Final   <- "2017-07-28"   
+Fecha_Final   <- "2017-07-28"
 @
 
-<<Ini, include=FALSE, echo=FALSE, eval=FALSE>>=
+
+<<Ini, include=FALSE, echo=FALSE, eval=TRUE>>=
 
 suppressMessages(library(downloader))
 suppressMessages(library(ggplot2))
 suppressMessages(library(knitr))
 suppressMessages(library(httr))
+suppressMessages(library(lubridate))
 suppressMessages(library(RCurl))
 suppressMessages(library(jsonlite))
 suppressMessages(library(dplyr))
 suppressMessages(library(xts))
 suppressMessages(library(quantmod))
 suppressMessages(library(RMySQL))
+suppressMessages(library(stats))
+suppressMessages(library(tseries))
+suppressMessages(library(reshape2))
+suppressMessages(library(scales))
+suppressMessages(library(moments))
+suppressMessages(library(lmtest))
+suppressMessages(library(tseries))
+suppressMessages(library(TSA))
 
 @
 
-<<Data, include=FALSE, echo=FALSE, eval=FALSE>>=
+<<Data, include=FALSE, echo=FALSE, eval=TRUE>>=
 
-DB_HST  <- "127.0.0.1" 
-DB_IID  <- "mystdb"
+# DB_HST  <- "127.0.0.1" 
+# DB_IID  <- "mystdb"
+# DB_PRT  <- 3306
+# DB_MUN  <- "root"
+# DB_PWD  <- "root"
+
+DB_HST  <- "rdsdb.crejydfkvam5.us-west-1.rds.amazonaws.com" 
+DB_IID  <- "RDS_DataBase"
 DB_PRT  <- 3306
 DB_MUN  <- "root"
-DB_PWD  <- "root"
+DB_PWD  <- "rootpassword"
 
 OA_At  <- "practice"
 OA_Ai  <- 1742531
@@ -54,7 +71,7 @@ OA_Ak  <- "ada4a61b0d5bc0e5939365e01450b614-4121f84f01ad78942c46fc3ac777baa6"
 @
 
 
-<<GitHub, include=FALSE, echo=FALSE, eval=FALSE>>=
+<<GitHub, include=FALSE, echo=FALSE, eval=TRUE>>=
 RawGitHub <- "https://raw.githubusercontent.com/IFFranciscoME/"
 
 DataProcessor <- paste(RawGitHub,"RDataProcessor/master/RDataProcessor.R",sep="")
@@ -95,10 +112,6 @@ for(j in 1:3) {
   
   }
 
-# Datos[[1]] <- Datos[[1]][which(as.Date(Datos[[1]]$TimeStamp) == OA_Ini):length(Datos[[1]]$TimeStamp),]
-# Datos[[2]] <- Datos[[2]][which(as.Date(Datos[[2]]$TimeStamp) == OA_Ini):length(Datos[[2]]$TimeStamp),]
-# Datos[[3]] <- Datos[[3]][which(as.Date(Datos[[3]]$TimeStamp) == OA_Ini):length(Datos[[3]]$TimeStamp),]
-
 FirstTS <- first(intersect(intersect(Datos[[1]]$TimeStamp,Datos[[2]]$TimeStamp),Datos[[3]]$TimeStamp))
 LastTS  <- last(intersect(intersect(Datos[[1]]$TimeStamp,Datos[[2]]$TimeStamp),Datos[[3]]$TimeStamp))
 
@@ -108,17 +121,24 @@ LComun123  <- which(Datos[[1]]$TimeStamp == LastTS)
 Datos[[1]] <- Datos[[1]][FComun123:LComun123,]
 Datos[[2]] <- Datos[[2]][which(Datos[[2]]$TimeStamp == FirstTS):which(Datos[[2]]$TimeStamp == LastTS), ]
 Datos[[3]] <- Datos[[3]][which(Datos[[3]]$TimeStamp == FirstTS):which(Datos[[3]]$TimeStamp == LastTS), ]
+
 @
 
-<<Datos, include=FALSE, echo=FALSE, eval=FALSE>>=
+<<BTC_Data, include=FALSE, echo=FALSE, eval=FALSE>>=
 
+@
+
+<<Write_Data, include=FALSE, echo=FALSE, eval=FALSE>>=
+
+# -- Establish a connection --------------------------------------------------------------------- #
 DB_Con <- dbConnect(MySQL(),
                     user = DB_MUN, 
                     password = DB_PWD,
                     host = DB_HST,
                     dbname = DB_IID)
 
-Query <- "CREATE TABLE `mystdb`.`datos_h8` (`TimeStamp` DATETIME NOT NULL,
+# -- Create a table ----------------------------------------------------------------------------- #
+Query <- "CREATE TABLE `RDS_DataBase`.`datos_d` (`TimeStamp` DATETIME NOT NULL,
                                             `Open` FLOAT NULL,
                                             `High` FLOAT NULL,
                                             `Low` FLOAT NULL,
@@ -127,8 +147,10 @@ Query <- "CREATE TABLE `mystdb`.`datos_h8` (`TimeStamp` DATETIME NOT NULL,
 
 res_query <- dbGetQuery(conn = DB_Con, statement = Query)
 
+# -- populate table with historical prices ------------------------------------------------------ #
 for(i in 1:length(Datos[[2]]$TimeStamp)) {
-  Query_P <- "INSERT INTO `mystdb`.`datos_h8` (`TimeStamp`, `Open`, `High`, `Low`, `Close`) VALUES ( "
+  Query_P <- "INSERT INTO `RDS_DataBase`.`datos_d` (`TimeStamp`, `Open`, `High`, `Low`, `Close`) 
+              VALUES ( "
   Valores <- paste( "'",Datos[[2]]$TimeStamp[i],"'", ", " , "'", Datos[[2]]$Open[i],"'", ", ",
                     "'",Datos[[2]]$High[i],"'", ", ", "'",Datos[[2]]$Low[i],"'",", ",
                     "'",Datos[[2]]$Close[i],"'", ');', sep="")
@@ -137,63 +159,262 @@ Query_PF <- paste(Query_P,Valores,sep="")
 
 dbGetQuery(conn = DB_Con, statement = Query_PF)
 }
+dbDisconnect(DB_Con)
+@
+
+<<Read_Data, include=FALSE, echo=FALSE, eval=TRUE>>=
+
+# -- read table with prices --------------------------------------------------------------------- #
+
+DB_Con <- dbConnect(MySQL(),
+                    user = DB_MUN, 
+                    password = DB_PWD,
+                    host = DB_HST,
+                    dbname = DB_IID)
+
+# Query_h1 <- paste("SELECT * FROM mystdb.", "datos_h1", ";", sep="")
+# Datos_h1 <- dbGetQuery(conn = DB_Con, statement = Query_h1)
+# 
+# Query_h8 <- paste("SELECT * FROM mystdb.", "datos_h8", ";", sep="")
+# Datos_h8 <- dbGetQuery(conn = DB_Con, statement = Query_h8)
+
+Query_d <- paste("SELECT * FROM RDS_DataBase.", "datos_d", ";", sep="")
+Datos_d <- dbGetQuery(conn = DB_Con, statement = Query_d)
 
 dbDisconnect(DB_Con)
 
 @
 
 
-<<SQL_Datos, include=FALSE, echo=FALSE, eval=FALSE>>=
+<<Prepare_Data, include=FALSE, echo=FALSE, eval=TRUE>>=
 
-x <- Datos[[1]]$Close[1:10]
-conf.level <- 0.95
-Type = "partial"
+Feature_Eng <- function(data) {
 
-ciline <- qnorm((1 - conf.level)/2)/sqrt(length(x))
+  dataset <- data
+  dataset$TimeStamp <- as.POSIXct(data$TimeStamp, origin = "1970-01-01", tz = "America/Monterrey")
+  dataset$MT <- month(dataset$TimeStamp,label = TRUE, abbr = FALSE)
+  dataset$WD <- weekdays(dataset$TimeStamp)
+  dataset$HH <- hour(dataset$TimeStamp)
 
-bacf   <- acf(x, plot = FALSE, type = Type)
-
-bacfdf <- with(bacf, data.frame(lag, acf))
-
-q <- ggplot(data=bacfdf, mapping=aes(x=lag, y=acf)) +
-       geom_bar(stat = "identity", position = "identity") +
-       geom_hline(yintercept = ciline, color = "dark grey", size = 0.35, linetype = "dashed")
-q
-
-ggACF(x = Datos[[1]], LagMax = 30, Type = "correlation")
-
-  x = Datos[[1]]$Close[1:100]
-  LagMax = 30
-  Type = "correlation"
-  Yaxis <- "Yaxis"
-  Xaxis <- "Xaxis"
+  dataset$CO <- (dataset$Close - dataset$Open)*100
+  dataset$HL <- (dataset$High - dataset$Low)*100
+  dataset$DR <- 0
+  dataset$DR[which((dataset$Close - dataset$Open) >= 0)] <- 1
   
+  # -- Alcistas Positivas
+
+ABAcum1 <- function(x) {
+      
+      rl  <- rle(x)
+      len <- rl$lengths
+      v   <- rl$values
+      cumLen <- cumsum(len)
+      z <- x
+      iDrops <- c(2, diff(v)) < 0 
+      z[ cumLen[ iDrops ] ] <- -len[ c(iDrops[-1],FALSE) ]
+      x*cumsum(z) }
+    
+dataset$A1 <- as.numeric(ABAcum1(dataset$DR))
+
+# -- Bajistas Negativas
+
+ABAcum0 <- function(x) {
+      x   <- !x
+      rl  <- rle(x)
+      len <- rl$lengths
+      v   <- rl$values
+      cumLen <- cumsum(len)
+      z <- x
+      iDrops <- c(0, diff(v)) < 0
+      z[ cumLen[ iDrops ] ] <- -len[ c(iDrops[-1],FALSE) ]
+      x*cumsum(z) }
+
+dataset$A0 <- as.numeric(ABAcum0(dataset$DR))
+    
+return(dataset)
+}
+
+# h1_dataset <- Feature_Eng(Datos_h1)
+# h8_dataset <- Feature_Eng(Datos_h8)
+d_dataset  <- Feature_Eng(Datos_d)
+
+Price_Data_F <- function(Data_in) {
+
+  Price_Data <- data.frame(matrix(nrow=8, ncol=2, data=0))
+  colnames(Price_Data) <- c("Value", "Parameter")
+
+  Price_Data[1,] <- c("Observations", (length(Data_in$TimeStamp)))
+  Price_Data[2,] <- c("Start Date", as.character(first(Data_in$TimeStamp)))
+  Price_Data[3,] <- c("Min Value", round(min(Data_in$Close),2) )
+  Price_Data[4,] <- c("Mean", round(mean(Data_in$Close)))
+  Price_Data[5,] <- c("Median", median(Data_in$Close))
+  Price_Data[6,] <- c("Standar Deviation", sd(Data_in$Close))
+  Price_Data[7,] <- c("Max Value", max(Data_in$Close))
+  Price_Data[8,] <- c("End Date", as.character(last(Data_in$TimeStamp)))
+
+return(Price_Data)
+}
+
+Price_Data <- Price_Data_F(d_dataset)
+
+@
+
+<<Plot_ts, include=FALSE, echo=FALSE, eval=TRUE, fig.height=6.5, fig.width=20.5,fig.show=FALSE>>=
+
+Price_plot <- function(data) {
+
+  Precios <- data[,c("TimeStamp","Open","High","Low","Close")]
+  colnames(Precios) <- c("TimeStamp","Open","High","Low","Close")
+
+  Fecha_Inicial <- first(Precios$TimeStamp)
+  Fecha_Final   <- last(Precios$TimeStamp)
+
+  Fechas_X <- c(Precios$TimeStamp[round(quantile(seq(1,length(Precios$TimeStamp),1),.05),0)],
+                Precios$TimeStamp[round(quantile(seq(1,length(Precios$TimeStamp),1),.20),0)],
+                Precios$TimeStamp[round(quantile(seq(1,length(Precios$TimeStamp),1),.35),0)],
+                Precios$TimeStamp[round(quantile(seq(1,length(Precios$TimeStamp),1),.50),0)],
+                Precios$TimeStamp[round(quantile(seq(1,length(Precios$TimeStamp),1),.65),0)],
+                Precios$TimeStamp[round(quantile(seq(1,length(Precios$TimeStamp),1),.80),0)],
+                Precios$TimeStamp[round(quantile(seq(1,length(Precios$TimeStamp),1),.96),0)])
+
+  Fechas_Vx <- c()
+  for(i in 1:length(Fechas_X)) Fechas_Vx[i] <- which(Precios$TimeStamp == Fechas_X[i])
+
+  Fechas_XX <- as.numeric(Fechas_X)
+
+  plot <- ggplot(Precios, aes(x=Precios$TimeStamp, y=Precios$Close)) + 
+    geom_line(size = 2, color = "steel blue") + 
+    scale_x_datetime(breaks = Fechas_X,labels = date_format("%d/%m/%Y"))  + 
+    labs(title=NULL, x=NULL, y=NULL) +
+
+    theme(
+      panel.grid.minor.y = element_line(size = .55, color = "grey",linetype = "dashed"),
+      panel.grid.major.y = element_line(size = .55, color = "grey",linetype = "dashed"),
+      panel.grid.major.x = element_line(size = .55, color = "grey",linetype = "dashed"),
+      panel.grid.minor.x = element_line(size = .55, color = "grey",linetype = "dashed"),
+      axis.text.x =element_text(colour = "black",size = 18, hjust =.5,vjust = 0),
+      axis.text.y =element_text(colour = "black",size = 18, hjust =.5,vjust = 0),
+      axis.title.x=element_text(colour = "black",size = 18, hjust =.5,vjust = 0),
+      axis.title.y=NULL) +
+    geom_vline(xintercept=Fechas_XX, linetype = 5, size=1, colour="dark grey", alpha = 0.8)  + 
   
-  ciline <- 2/sqrt(length(x))
-  bacf   <- acf(x, plot = FALSE, lag.max = LagMax, type = Type)
+    scale_y_continuous(breaks = round(seq(
+      round(min(Precios$Close),6),
+      round(max(Precios$Close),6),
+      (round(max(Precios$Close),6) - round(min(Precios$Close),6))/10),2), labels = comma)
+
+  return(plot)
+}
+Price_plot(d_dataset)
+
+@
+
+
+<<Plot_acf, include=FALSE, echo=FALSE, eval=TRUE, fig.height=6.5, fig.width=10,fig.show=FALSE>>=
+
+acf_plot <- function(x, type) {
+
+  cl    <- 0.95
+  cline <- qnorm((1 - cl)/2)/sqrt(length(x))
+  ifelse(type == "acf", bacf <- acf(x, plot = FALSE), bacf <- pacf(x, plot = FALSE))
+
   bacfdf <- with(bacf, data.frame(lag, acf))
-  bacfdf <- bacfdf[-seq(1, 0),]
-  Sig_nc <- (abs(bacfdf[,2]) > abs(ciline))^2
-  bacfdf <- cbind(bacfdf, Sig_nc)
+  significant <- (abs(bacfdf[, 2]) > abs(cline))^2
+  bacfdf <- cbind(bacfdf, significant)
+
+  plot <- ggplot(data=bacfdf, mapping=aes(x=lag, y=acf, fill = significant)) +
+              geom_bar(stat = "identity", position = "identity",width = .75) +
+              geom_hline(yintercept = cline, linetype = "dashed", color = "steel blue") + 
+              geom_hline(yintercept = cline*-1, linetype = "dashed", color = "steel blue") +
+              guides(fill=FALSE)
+
+  return(plot)
+}
+
+acf_plot(d_dataset$Close, "acf")
+acf_plot(d_dataset$Close, "pacf")
+
+@
+
+<<Data_Stats, include=FALSE, echo=FALSE, eval=TRUE>>=
+
+# Ljung-Box test if exists autocorrelation in a time series
+#  A small p-value (for instance, p-value < .05) indicates the possibility of non-zero autocorrelation within the first m lags.
+
+priceLB <- Box.test(d_dataset$Close, lag = 1, type = "Ljung")$p.value
+priceKS <- ks.test(d_dataset$Close, "pnorm", 1, 2)$p.value
+priceML <- McLeod.Li.test(y=d_dataset$Close)$p.value[1]
+
+rendsLB <- Box.test(diff(log(d_dataset$Close)), lag = 1, type = "Ljung")
+rendsKS <- ks.test(diff(log(d_dataset$Close)), "pnorm", 1, 2)
+rendsML <- McLeod.Li.test(y= diff(log(d_dataset$Close)))$p.values
+
+@
+
+<<Tabla_Velas, include=FALSE, echo=FALSE, eval=TRUE>>=
+
+Data_Stats <- function(data) {
+
+  Price_Stats <- data.frame(matrix(nrow=5, ncol=7))
+  Price_Stats[,1] <- c("Close - Open", "High - Low", "Direction",
+                       "Cons Ups", "Cons Downs")
+  colnames(Price_Stats) <- c("Periodicity","Max","Min","Median",
+                             "Variation","Skew","Kurtosis")
+
+  Price_Stats[1,2:7] <- round(c(max(data$CO), min(data$CO), median(data$CO),
+                                sd(data$CO), skewness(data$CO), kurtosis(data$CO)),2)
+
+  Price_Stats[2,2:7] <- round(c(max(data$HL), min(data$HL), median(data$HL),
+                                sd(data$HL), skewness(data$HL), kurtosis(data$HL)),2)
+
+  Price_Stats[3,2:7] <- round(c(max(data$DR), min(data$DR), median(data$DR),
+                                sd(data$DR), skewness(data$DR), kurtosis(data$DR)),2)
+
+  Price_Stats[4,2:7] <- round(c(max(data$A1), min(data$A1), median(data$A1),
+                                sd(data$A1), skewness(data$A1), kurtosis(data$A1)),2)
+
+  Price_Stats[5,2:7] <- round(c(max(data$A0), min(data$A0), median(data$A0),
+                                sd(data$A0), skewness(data$A0), kurtosis(data$A0)),2)
+return(Price_Stats)
+}
   
-  fac_gg <- qplot(lag, acf, data=bacfdf,geom="bar",width=.75, stat = "identity",
-  position = "identity", ylab = Yaxis, xlab = Xaxis,  fill = factor(Sig_nc))   +
-  geom_hline(yintercept = -ciline, color = "dark grey", size = 0.35,
-  linetype = "dashed")                                                     +
-  geom_hline(yintercept = ciline,color = "dark grey", size = 0.35,
-  linetype = "dashed")                                                     +
-  geom_hline(yintercept = 0, color = "dark grey",size = 0.25)              +
-  scale_fill_hue(breaks = 0:1, labels=c("No Significative"," Significative"),
-                 h=c(260, 235))                                            +
-  scale_x_continuous(breaks = c(2,4,6,8,10,12,14,16,18,20,22,24,26,28)) +
-  theme(panel.background = element_rect(size = .75, colour = "dark grey",
-  fill = "white"), 
-  axis.title.x = element_text(size = 8.5),
-  axis.title.y = element_text(size = 8.5),
-  plot.title = element_text(size = 5,vjust = 1),
-  legend.position = "bottom", legend.title = element_blank(),
-  legend.text = element_text(colour="blue",size = 8))
+stats_d  <- Data_Stats(d_dataset)
+# stats_h1 <- Data_Stats(h1_dataset)
+# stats_h8 <- Data_Stats(h8_dataset)
+
+@
+
+<<BP_Plot, include=FALSE, echo=FALSE, eval=TRUE, fig.height=5, fig.width=12.5, fig.show=FALSE>>=
+
+wd_boxplot <- function(Data,Column) {
   
+  Clm <- which(colnames(Data) == Column)
+  y_scale  <- seq(min(Data[,Clm]), max(Data[,Clm]), (max(Data[,Clm])-min(Data[,Clm]))/10)
+  plot <- ggplot(Data, aes(x=Data$WD, y=Data[,Clm])) + 
+          geom_boxplot(aes(group = Data$WD, fill = factor(Data$WD)),
+                       outlier.size = 4, outlier.color = "red") + 
+          scale_fill_manual(values=c("dark grey","sky blue","steel blue","blue",
+                                     "royal blue","dark grey")) +
+          labs(title=NULL, x=NULL, y=NULL) + 
+          theme(panel.background = element_rect(fill="white"),
+                panel.grid.minor.y = element_line(size = .55, color = "dark grey"),
+                panel.grid.major.y = element_line(size = .55, color = "dark grey",linetype = "dashed"),
+                panel.grid.major.x = NULL,
+                panel.grid.minor.x = NULL,
+                axis.text.x =element_text(colour = "black",size = 18, hjust =.5,vjust = 0),
+                axis.text.y =element_text(colour = "black",size = 18, hjust =.5,vjust = 0),
+                axis.title.x=element_text(colour = "black",size = 18, hjust =.5,vjust = 0),
+                axis.title.y=NULL, legend.position = "none") +
+          scale_y_continuous(breaks = trunc(y_scale), labels = comma) 
+
+  return(plot)
+}
+
+wd_boxplot(d_dataset, "CO")
+wd_boxplot(d_dataset, "HL")
+wd_boxplot(d_dataset, "A0")
+wd_boxplot(d_dataset, "A1")
+
 @
 
 
@@ -201,7 +422,7 @@ ggACF(x = Datos[[1]], LagMax = 30, Type = "correlation")
 %	-- TITLE SECTION 
 % -- -------------------------------------------------------------------------------------------- %
 
-\title{\Huge Applied econometrics for time series analysis }
+\title{\Huge Econometrics for time series analysis }
 
 % -- -------------------------------------------------------------------------------------------- %
 %	-- FOOTER TEXT
@@ -215,7 +436,7 @@ ggACF(x = Datos[[1]], LagMax = 30, Type = "correlation")
 \begin{document}
 
 % -- ----------------------------------------------------------------------------------------- -- %
-% -- -- Informacion del Activo -- VELAS ------------------------------------------------------ -- %
+% -- -- Row 1 -- Dialy Prices ---------------------------------------------------------------- -- %
 % -- ----------------------------------------------------------------------------------------- -- %
 
 \begin{columns}[t]
@@ -225,7 +446,11 @@ ggACF(x = Datos[[1]], LagMax = 30, Type = "correlation")
 
 \begin{column}{.66 \linewidth}
 
-  \begin{block}{Precio de Cierre}
+  \begin{block}{Price Time Series}
+
+  \begin{figure}[H]
+    \includegraphics[scale=1]{figure/Plot_ts-1.pdf}
+  \end{figure}
 
   \end{block}
   
@@ -235,11 +460,197 @@ ggACF(x = Datos[[1]], LagMax = 30, Type = "correlation")
 % -- ----------------------------------------------------------------------------------------- -- %
 
 \begin{column}{.32 \linewidth}
-  \begin{block}{Estadistica Precios}
-
+  
+  \begin{block}{Price Data}
+  
+  \centering
+  \Sexpr{kable(Price_Data)}
+ 
+ 
   \end{block}
+  
 \end{column}
 
 \end{columns}
+
+% -- ----------------------------------------------------------------------------------------- -- %
+% -- -- Row 2 -- 8 Hour Prices --------------------------------------------------------------- -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{columns}[t]
+
+% -- ------------------------------------------------------------------------------- Columna 1 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.32 \linewidth}
+
+  \begin{block}{Statistical Tests}
+
+    \begin{itemize}
+    
+      \item Serial Auto Correlation: Llung-Box \\
+            p.value: \Sexpr{priceLB} \\
+      
+      \item Normality: Kolgomorov-Smirnoff \\
+            p.value: \Sexpr{priceKS} \\
+            
+      \item Heteroscedascity:  McLeod-Li\\
+            p.value: \Sexpr{priceML} \\
+    
+    \end{itemize}
+  
+
+  \end{block}
+  
+\end{column}
+
+% -- ------------------------------------------------------------------------------- Columna 2 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.32 \linewidth}
+
+  \begin{block}{Serial (Cumulative) Auto Correlation}
+
+   \begin{figure}[H]
+    \includegraphics[scale=1]{figure/Plot_acf-1.pdf}
+    \end{figure}
+
+  \end{block}
+  
+\end{column}
+
+% -- ------------------------------------------------------------------------------- Columna 3 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.32 \linewidth}
+
+  \begin{block}{Partial Auto Correlation}
+
+   \begin{figure}[H]
+    \includegraphics[scale=1]{figure/Plot_acf-2.pdf}
+    \end{figure}
+
+  \end{block}
+  
+\end{column}
+\end{columns}
+
+% -- ----------------------------------------------------------------------------------------- -- %
+% -- -- Row 3 -- 8 Hour Prices --------------------------------------------------------------- -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{columns}[t]
+
+% -- ------------------------------------------------------------------------------- Columna 1 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.66 \linewidth}
+
+  \begin{block}{Price Time Series}
+
+  \begin{figure}[H]
+    \includegraphics[scale=1]{figure/Plot_ts-1.pdf}
+  \end{figure}
+
+  \end{block}
+  
+\end{column}
+
+% -- ------------------------------------------------------------------------------- Columna 2 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.32 \linewidth}
+  
+  \begin{block}{Price Data}
+  
+  \centering
+  \Sexpr{kable(Price_Data)}
+ 
+ 
+  \end{block}
+  
+\end{column}
+
+\end{columns}
+
+% -- ----------------------------------------------------------------------------------------- -- %
+% -- -- Row 4 -- 8 Hour Prices --------------------------------------------------------------- -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+
+\begin{columns}[t]
+
+% -- ------------------------------------------------------------------------------- Columna 1 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.49 \linewidth}
+
+  \begin{block}{Close - Open}
+
+    \begin{figure}[H]
+      \includegraphics[scale=1]{figure/BP_Plot-1.pdf}
+    \end{figure}
+    
+  \end{block}
+  
+\end{column}
+
+% -- ------------------------------------------------------------------------------- Columna 2 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.49 \linewidth}
+
+  \begin{block}{High - Low}
+
+   \begin{figure}[H]
+    \includegraphics[scale=1]{figure/BP_Plot-2.pdf}
+    \end{figure}
+
+  \end{block}
+  
+\end{column}
+
+\end{columns}
+
+% -- ----------------------------------------------------------------------------------------- -- %
+% -- -- Row 5 --   ---------------------------------------------------------------- -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{columns}[t]
+
+% -- ------------------------------------------------------------------------------- Columna 1 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+
+\begin{column}{.48 \linewidth}
+
+  \begin{block}{Consecutive Down prices by day}
+
+   \begin{figure}[H]
+    \includegraphics[scale=1]{figure/BP_Plot-3.pdf}
+    \end{figure}
+
+  \end{block}
+  
+\end{column}
+
+
+% -- ------------------------------------------------------------------------------- Columna 2 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.48 \linewidth}
+  
+  \begin{block}{Consecutive Up prices by day}
+
+   \begin{figure}[H]
+    \includegraphics[scale=1]{figure/BP_Plot-4.pdf}
+    \end{figure}
+
+  \end{block}
+  
+\end{column}
+
+\end{columns}
+
 
 \end{document}

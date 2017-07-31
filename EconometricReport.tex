@@ -75,11 +75,35 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 % -- -------------------------------------------------------------------------------------------- %
 %	-- TITLE SECTION 
 % -- -------------------------------------------------------------------------------------------- %
 
-\title{\Huge Applied econometrics for time series analysis }
+\title{\Huge Econometrics for time series analysis }
 
 % -- -------------------------------------------------------------------------------------------- %
 %	-- FOOTER TEXT
@@ -93,7 +117,7 @@
 \begin{document}
 
 % -- ----------------------------------------------------------------------------------------- -- %
-% -- -- Informacion del Activo -- VELAS ------------------------------------------------------ -- %
+% -- -- Row 1 -- Dialy Prices ---------------------------------------------------------------- -- %
 % -- ----------------------------------------------------------------------------------------- -- %
 
 \begin{columns}[t]
@@ -103,7 +127,11 @@
 
 \begin{column}{.66 \linewidth}
 
-  \begin{block}{Precio de Cierre}
+  \begin{block}{Price Time Series}
+
+  \begin{figure}[H]
+    \includegraphics[scale=1]{figure/Plot_ts-1.pdf}
+  \end{figure}
 
   \end{block}
   
@@ -113,11 +141,243 @@
 % -- ----------------------------------------------------------------------------------------- -- %
 
 \begin{column}{.32 \linewidth}
-  \begin{block}{Estadistica Precios}
+  
+  \begin{block}{Price Data}
+  
+  \centering
+  
+\begin{tabular}{l|l}
+\hline
+Value & Parameter\\
+\hline
+Observations & 471\\
+\hline
+Start Date & 2017-01-03 15:00:00\\
+\hline
+Min Value & 17.45\\
+\hline
+Mean & 19\\
+\hline
+Median & 18.8168\\
+\hline
+Standar Deviation & 1.17703285640164\\
+\hline
+Max Value & 21.9842\\
+\hline
+End Date & 2017-07-27 15:00:00\\
+\hline
+\end{tabular}
 
+
+ 
+ 
   \end{block}
+  
 \end{column}
 
 \end{columns}
+
+% -- ----------------------------------------------------------------------------------------- -- %
+% -- -- Row 2 -- 8 Hour Prices --------------------------------------------------------------- -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{columns}[t]
+
+% -- ------------------------------------------------------------------------------- Columna 1 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.32 \linewidth}
+
+  \begin{block}{Statistical Tests}
+
+    \begin{itemize}
+    
+      \item Serial Auto Correlation: Llung-Box \\
+            p.value: 0 \\
+      
+      \item Normality: Kolgomorov-Smirnoff \\
+            p.value: 0 \\
+            
+      \item Heteroscedascity:  McLeod-Li\\
+            p.value: 0 \\
+    
+    \end{itemize}
+  
+
+  \end{block}
+  
+\end{column}
+
+% -- ------------------------------------------------------------------------------- Columna 2 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.32 \linewidth}
+
+  \begin{block}{Serial (Cumulative) Auto Correlation}
+
+   \begin{figure}[H]
+    \includegraphics[scale=1]{figure/Plot_acf-1.pdf}
+    \end{figure}
+
+  \end{block}
+  
+\end{column}
+
+% -- ------------------------------------------------------------------------------- Columna 3 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.32 \linewidth}
+
+  \begin{block}{Partial Auto Correlation}
+
+   \begin{figure}[H]
+    \includegraphics[scale=1]{figure/Plot_acf-2.pdf}
+    \end{figure}
+
+  \end{block}
+  
+\end{column}
+\end{columns}
+
+% -- ----------------------------------------------------------------------------------------- -- %
+% -- -- Row 3 -- 8 Hour Prices --------------------------------------------------------------- -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{columns}[t]
+
+% -- ------------------------------------------------------------------------------- Columna 1 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.66 \linewidth}
+
+  \begin{block}{Price Time Series}
+
+  \begin{figure}[H]
+    \includegraphics[scale=1]{figure/Plot_ts-1.pdf}
+  \end{figure}
+
+  \end{block}
+  
+\end{column}
+
+% -- ------------------------------------------------------------------------------- Columna 2 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.32 \linewidth}
+  
+  \begin{block}{Price Data}
+  
+  \centering
+  
+\begin{tabular}{l|l}
+\hline
+Value & Parameter\\
+\hline
+Observations & 471\\
+\hline
+Start Date & 2017-01-03 15:00:00\\
+\hline
+Min Value & 17.45\\
+\hline
+Mean & 19\\
+\hline
+Median & 18.8168\\
+\hline
+Standar Deviation & 1.17703285640164\\
+\hline
+Max Value & 21.9842\\
+\hline
+End Date & 2017-07-27 15:00:00\\
+\hline
+\end{tabular}
+
+
+ 
+ 
+  \end{block}
+  
+\end{column}
+
+\end{columns}
+
+% -- ----------------------------------------------------------------------------------------- -- %
+% -- -- Row 4 -- 8 Hour Prices --------------------------------------------------------------- -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+
+\begin{columns}[t]
+
+% -- ------------------------------------------------------------------------------- Columna 1 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.49 \linewidth}
+
+  \begin{block}{Close - Open}
+
+    \begin{figure}[H]
+      \includegraphics[scale=1]{figure/BP_Plot-1.pdf}
+    \end{figure}
+    
+  \end{block}
+  
+\end{column}
+
+% -- ------------------------------------------------------------------------------- Columna 2 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.49 \linewidth}
+
+  \begin{block}{High - Low}
+
+   \begin{figure}[H]
+    \includegraphics[scale=1]{figure/BP_Plot-2.pdf}
+    \end{figure}
+
+  \end{block}
+  
+\end{column}
+
+\end{columns}
+
+% -- ----------------------------------------------------------------------------------------- -- %
+% -- -- Row 5 --   ---------------------------------------------------------------- -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{columns}[t]
+
+% -- ------------------------------------------------------------------------------- Columna 1 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+
+\begin{column}{.48 \linewidth}
+
+  \begin{block}{Consecutive Down prices by day}
+
+   \begin{figure}[H]
+    \includegraphics[scale=1]{figure/BP_Plot-3.pdf}
+    \end{figure}
+
+  \end{block}
+  
+\end{column}
+
+
+% -- ------------------------------------------------------------------------------- Columna 2 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.48 \linewidth}
+  
+  \begin{block}{Consecutive Up prices by day}
+
+   \begin{figure}[H]
+    \includegraphics[scale=1]{figure/BP_Plot-4.pdf}
+    \end{figure}
+
+  \end{block}
+  
+\end{column}
+
+\end{columns}
+
 
 \end{document}
